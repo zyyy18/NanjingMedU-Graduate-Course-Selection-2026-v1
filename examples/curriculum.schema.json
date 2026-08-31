@@ -1,7 +1,30 @@
 {
-  "school": "",
-  "program": "",
-  "semester": "2026-2027-1",
-  "courses": [{"code":"COURSE001","name":"示例课程A","credit":2,"category":"专业选修","group_id":1,"group_rule":"3选1","required":false,"semester":1}],
-  "warnings": []
+  "school": "南京医科大学",
+  "program": "全日制专业学位博士研究生：临床医学—皮肤病与性病学",
+  "semester": "2026年度",
+  "courses": [
+    {
+      "code": "G210gw004a",
+      "name": "医学论文写作与学术规范",
+      "credit": 1,
+      "category": "公共必修课",
+      "group_id": null,
+      "group_rule": "",
+      "required": true,
+      "semester": 1
+    },
+    {
+      "code": "X210yj001a",
+      "name": "大数据算法",
+      "credit": 1,
+      "category": "公共必修课",
+      "group_id": 1,
+      "group_rule": "第1组，选1-1门，3选1",
+      "required": false,
+      "semester": 1
+    }
+  ],
+  "warnings": [
+    "示例仅展示 Schema 形式；正式运行请使用 sync_to_feishu.py 对完整 PDF 进行 AI 解析。"
+  ]
 }
