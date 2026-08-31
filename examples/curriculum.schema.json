@@ -1,0 +1,7 @@
+{
+  "school": "",
+  "program": "",
+  "semester": "2026-2027-1",
+  "courses": [{"code":"COURSE001","name":"示例课程A","credit":2,"category":"专业选修","group_id":1,"group_rule":"3选1","required":false,"semester":1}],
+  "warnings": []
+}
