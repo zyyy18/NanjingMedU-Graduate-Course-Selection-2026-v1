@@ -4,13 +4,13 @@
 
 > 把复杂的培养方案交给 AI 理解，把课程与偏好交给飞书管理，把真正能毕业、能上课、时间不冲突的组合交给约束优化器求解。
 
-这是在原有研究生智能选课程序基础上的 Hackathon 版本。原程序已经具备 PDF/Excel 读取、课程时间冲突检测、培养方案分组约束、免修/排除、课程偏好、校区限制、多方案生成和 OR-Tools CP-SAT 求解能力。新版本不推倒这些能力，而是在其上增加**通用培养方案 Schema、AI 自然语言理解、飞书多维表格读写和飞书机器人入口**。
+这是在原有研究生智能选课程序基础上的 Hackathon 版本。原程序已经具备 PDF/Excel 读取、课程时间冲突检测、培养方案分组约束、免修/排除、课程偏好、校区限制、多方案生成和 OR-Tools CP-SAT 求解能力。新版本在其上增加**通用培养方案 Schema、AI 自然语言理解、真实 PDF/XLSX → 飞书多维表格导入和飞书机器人入口**。
 
 ## ✨ 核心闭环
 
 ```text
 ┌─────────────── 飞书 ───────────────┐
-│ 多维表格：培养方案 / 课程班级 / 结果 │
+│ 多维表格：培养方案 / 课程目录 / 班级 │
 │              ↑             ↓       │
 │         用户自然语言      方案回写   │
 └──────────────┬──────────────┘
@@ -23,8 +23,8 @@
         └──────┬───────┘
                ↓
         ┌──────────────┐
-        │  Constraint  │
-        │   Engine     │
+        │ Constraint   │
+        │ Engine       │
         │ OR-Tools     │
         │ CP-SAT       │
         └──────┬───────┘
@@ -40,26 +40,52 @@
 - AI 负责从自然语言/非结构化文本中理解约束，并解释结果；
 - OR-Tools 负责严格判断“是否可行”。
 
-AI 不直接“猜答案”，最终课程组合必须经过约束求解器验证。
+## 🚀 当前 Hackathon 版本：真实 PDF + Excel 导入飞书
 
-## 🚀 为什么这个版本比原版更通用
+新增 `sync_to_feishu.py`，实现：
 
-原版培养方案解析里存在针对特定培养方案的课程编号集合和分组规则。这是原版只能适用于某一套培养方案的关键原因之一。
+```text
+培养方案 PDF
+   ↓
+PyPDF
+   ↓
+AI 结构化解析
+   ↓
+CurriculumSchema
+   ↓
+飞书培养方案表
 
-新版本把培养方案统一成：
-
-```json
-{
-  "code": "COURSE001",
-  "name": "课程A",
-  "credit": 2,
-  "group_id": 1,
-  "group_rule": "3选1",
-  "required": false
-}
+课程 Excel
+   ↓
+标准库 XLSX 解析
+   ↓
+课程目录 + 班级安排
+   ↓
+飞书课程目录表 + 课程班级表
 ```
 
-AI 将学校/专业的培养方案转换成这个 Schema，再交给现有约束求解器。更换学校时，核心求解器不需要跟着学校规则重写。
+其中**课程时间、地址、校区全部来自真实 Excel，不由 AI 猜测**；AI 专注于培养方案规则理解。这可以避免模型幻觉直接破坏排课结果。
+
+### 使用真实数据
+
+```bash
+python sync_to_feishu.py \
+  --pdf "pyfady_show(2).pdf" \
+  --xlsx "2026-2027学年第一学期（秋季）研究生课程目录及课程安排表(2).xlsx" \
+  --curriculum-table tbl培养方案 \
+  --course-table tbl课程目录 \
+  --class-table tbl课程班级
+```
+
+第一次建议：
+
+```bash
+python sync_to_feishu.py ... --dry-run
+```
+
+确认生成的 `ai_curriculum_result.json` 后再正式写入飞书。重复执行默认跳过已有课程；需要重新同步时使用 `--replace`。
+
+完整配置说明见 [`docs/FEISHU_REAL_DATA_SETUP.md`](docs/FEISHU_REAL_DATA_SETUP.md)。
 
 ## 🤖 AI 在运行时做什么
 
@@ -79,7 +105,7 @@ AI 会把它转换成结构化需求，再交给求解器。
 
 ### 3. 解释方案
 
-求解器生成方案后，AI 根据真实结果解释为什么推荐方案 1、哪些偏好被满足、有哪些妥协以及备选方案区别。
+求解器生成方案后，AI 根据真实结果解释为什么推荐方案、哪些偏好被满足、有哪些妥协以及备选方案差异。
 
 ## 🧠 为什么不能让 AI 直接生成选课结果
 
@@ -89,44 +115,16 @@ AI 会把它转换成结构化需求，再交给求解器。
 
 **AI 提出结构化约束 → Solver 精确求解 → AI 解释结果**。
 
-## 📚 飞书数据表建议
+## 📚 飞书数据表
 
-### 1. 培养方案表
+建议建立 4 张表：
 
-| 字段 | 示例 |
-|---|---|
-| 课程编号 | COURSE001 |
-| 课程名称 | 医学统计学 |
-| 学分 | 2 |
-| 课程类别 | 专业基础 |
-| 分组 | 2 |
-| 分组规则 | 3选1 |
-| 必修 | ✅ |
-| 学期 | 1 |
+- 培养方案
+- 课程目录
+- 课程班级
+- 方案结果
 
-### 2. 课程班级表
-
-| 字段 | 示例 |
-|---|---|
-| 班级名称 | 01班 |
-| 课程编号 | COURSE001 |
-| 课程名称 | 医学统计学 |
-| 学分 | 2 |
-| 时间 | 星期一 第7节-第8节 |
-| 上课地址 | XX教学楼 |
-| 校区 | 江宁校区 |
-
-### 3. 方案结果表
-
-| 字段 | 示例 |
-|---|---|
-| 方案 | 1 |
-| 总学分 | 10 |
-| 课程数 | 5 |
-| 用户需求 | 不想周一早八…… |
-| AI推荐理由 | …… |
-| 特殊需求 | JSON |
-| 课程JSON | JSON |
+字段模板见 [`docs/FEISHU_TABLE_TEMPLATE.md`](docs/FEISHU_TABLE_TEMPLATE.md)。
 
 ## 🛠️ 安装
 
@@ -139,31 +137,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-复制 `.env.example` 为 `.env` 并配置 AI 与飞书凭证。`.env` 不应提交到 GitHub。
-
-## ▶️ AI 培养方案解析
-
-```bash
-python ingest_curriculum.py your_training_plan.pdf
-```
-
-解析结果可以直接写入飞书：
-
-```bash
-python ingest_curriculum.py your_training_plan.pdf --write-feishu-table tblxxxx
-```
-
-执行链路：
-
-```text
-PDF
- ↓
-AI 识别培养方案
- ↓
-Schema 验证
- ↓
-飞书多维表格沉淀
-```
+复制 `.env.example` 为 `.env`。程序会自动读取 `.env`。
 
 ## ▶️ 飞书 + AI 选课 Demo
 
@@ -176,20 +150,6 @@ python -m ai_coursepilot \
   -n 5
 ```
 
-运行链路：
-
-```text
-飞书读取课程数据
-        ↓
-AI 解析用户需求
-        ↓
-OR-Tools 生成方案
-        ↓
-AI 解释方案
-        ↓
-飞书写回结果
-```
-
 ## 🤖 飞书机器人 Demo
 
 启动：
@@ -198,58 +158,52 @@ AI 解释方案
 uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
-然后将 `/feishu/webhook` 配置到飞书应用的事件订阅/回调地址。用户在飞书里 @机器人并发送自然语言需求后，机器人会调用 AI、调用 OR-Tools，并将结果解释返回。
-
-## 🔌 飞书能力
-
-本项目使用飞书开放平台服务端 API：
-
-- 获取 `tenant_access_token`
-- 多维表格列出记录
-- 多维表格新增记录
-- 消息发送
-
-飞书开放平台目前提供机器人、网页应用、多维表格、电子表格等开放能力，适合把本项目做成完整的数据与交互闭环。
+将 `/feishu/webhook` 配置到飞书应用事件回调后，用户可以直接在飞书中发送自然语言选课需求。
 
 ## 🧩 代码结构
 
 ```text
 .
 ├── ai_coursepilot/
-│   ├── __init__.py
-│   ├── __main__.py
 │   ├── schema.py
 │   ├── ai_client.py
 │   ├── feishu_client.py
+│   ├── feishu_import.py
 │   ├── ingest.py
-│   └── adapter.py / service.py
+│   └── ...
 ├── course_selector_gui_v15.py
-├── server.py
+├── sync_to_feishu.py
 ├── ingest_curriculum.py
-├── run_feishu_coursepilot.py
-├── examples/curriculum.schema.json
-├── tests/test_smoke.py
+├── server.py
+├── docs/
+├── examples/
+├── tests/
 ├── .env.example
-├── .gitignore
 └── requirements.txt
 ```
 
-`course_selector_gui_v15.py` 保留原有成熟的 GUI + CP-SAT 求解内核；新模块负责通用 Schema、AI、飞书和业务编排。
+`course_selector_gui_v15.py` 保留原有 GUI + CP-SAT 求解内核；Hackathon 新入口通过 Schema + AI + 飞书把它扩展为通用数据闭环。
 
-## 🏆 Hackathon Demo
+## 🏆 Hackathon Demo 推荐流程
 
-推荐现场演示：飞书多维表格中准备培养方案与课程班级 → 用户在飞书机器人说“我不想周一早八，尽量不去其他校区，喜欢王老师的课” → AI 解析自然语言 → OR-Tools 生成 3–5 个真正可行的方案 → AI 解释推荐理由 → 结果自动回写飞书。
+1. 在飞书多维表格准备空的“培养方案 / 课程目录 / 课程班级 / 方案结果”表。
+2. 运行 `sync_to_feishu.py`，展示真实培养方案 PDF 被 AI 解析并写入飞书。
+3. 展示真实课程 Excel 被确定性读取并写入飞书。
+4. 在飞书机器人中输入自然语言偏好。
+5. AI 将偏好转换为结构化约束。
+6. OR-Tools 生成多个真正可行的方案。
+7. AI 解释推荐理由并将结果沉淀回飞书。
 
-这样能够直接证明飞书和 AI 都是作品运行链路中的核心组成部分。
+这个流程能够直接体现：**飞书不是结果展示页，AI 也不是贴上去的文本，两者都在作品运行链路中承担实际职责。**
 
 ## ⚠️ 当前边界
 
 1. AI 输出必须经过 Schema/求解器验证。
 2. 不同飞书租户需要根据实际权限配置多维表格和消息权限。
-3. 扫描型培养方案 PDF 需要下一阶段接 OCR。
-4. 原有 GUI 中仍保留南京医科大学特定培养方案的旧解析逻辑；Hackathon 通用模式走新的 Schema + AI 链路。
+3. 扫描型培养方案 PDF 需要 OCR；当前版本针对可提取文本的 PDF。
+4. 原有 GUI 中仍保留南京医科大学特定培养方案的旧解析逻辑；Hackathon 新模式走通用 Schema + AI 链路。
+5. 当前仓库没有提交你的真实 App Secret、API Key、培养方案 PDF 和课程 Excel，以避免泄露凭证或原始业务数据。
 
 ## 🔗 相关资料
 
 飞书开放平台：<https://open.feishu.cn/>
-MD
